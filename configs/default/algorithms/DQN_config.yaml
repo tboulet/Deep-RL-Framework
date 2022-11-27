@@ -1,0 +1,20 @@
+# Hyper-parameters
+gamma : 0.99
+sample_size : 64
+learning_rate : 0.001
+n_step : 5
+algorithm_method : SARSAE
+
+# Learning
+reward_scaler : 10
+tau : 0.999
+clipping : null
+train_freq : 1
+gradients_steps : 10
+learning_starts : 1000
+
+# Exploration
+exploration_starts : 1000
+exploration_timesteps : 10000
+exploration_initial : 1
+exploration_final : 0.03

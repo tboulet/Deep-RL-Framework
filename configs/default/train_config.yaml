@@ -1,0 +1,28 @@
+# Loading agent
+load : False
+
+# Duration
+episodes : 1000
+steps : null
+
+# Logging
+n_render : 10
+wandb : false
+tb : false
+save : false
+print : true
+metrics:
+  # Values
+- MetricS_On_Learn_Numerical
+- Metric_Total_Reward
+- Metric_Reward 
+- Metric_Critic_Value_Unnormalized
+
+# Performance
+- Metric_Time_Count
+- Metric_Performances
+
+  # Other
+- Metric_Epsilon
+- Metric_Count_Episodes
+- Metric_Action_Frequencies

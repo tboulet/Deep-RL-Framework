@@ -1,17 +1,15 @@
 # RLearn
-from rlearn.algorithms import Agent
+from rlearn.agents import Agent
 from rlearn.implemented_agents import make_agent
-from rlearn.helper import get_configs, get_hp_dict
+from rlearn.helper import get_configs, get_hp_dict, get_date_hour_min
 
 # Other
 import gym
 import argparse
-import keyboard
-from sys import exit
-import json
-from yaml import SafeLoader
 import wandb
-
+from torch.utils.tensorboard import SummaryWriter
+from time import time, sleep
+import random
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -26,11 +24,12 @@ def get_args():
     parser.add_argument('--load', type = bool, help = 'Whether to load a model', default = None)
     # Configs
     parser.add_argument('--agent-cfg', type = str, help = 'Path to agent config file', default = None)
-    parser.add_argument('--inter-cfg', type = str, help = 'Path to interface config file', default = None)
     parser.add_argument('--train-cfg', type = str, help = 'Path to training config file', default = None)
     # Logging
     parser.add_argument('--wandb', type = bool, help = 'Whether metrics are logged in WandB', default = None)
     parser.add_argument('--tb', type = bool, help = 'Whether metrics are logged in Tensorboard', default = None)
+    parser.add_argument('--print', type = bool, help = 'Whether metrics are printed', default = None)
+    parser.add_argument('--dump', type = bool, help = 'Whether metrics are dumped in a file', default = None)
     parser.add_argument('--n_render', type = int, help = 'One episode on n_render is rendered', default = None)
     # Other hyperparams
     parser.add_argument('--hp', type = str, help = 'Dict of other hyperparameters {hp_name: value} with value being 0.9, SARSA, None, SARSA for example', default = None)
@@ -52,8 +51,8 @@ def get_args():
 if __name__ == '__main__':
     args = get_args()
     
-    print("Run starts. Press 'q' to quit.")
-
+    print("Run starts ...")
+    
     # Get configs from config paths
     agent_cfg, train_cfg = get_configs(args)
     # Override configs with CLI args
@@ -70,11 +69,9 @@ if __name__ == '__main__':
     train_cfg["n_render"] = train_cfg["n_render"] if train_cfg["n_render"] is not None else float('inf')
     # Get some training/logging variables
     steps = train_cfg["steps"]
-    episodes = train_cfg["episodes"]
-    do_wandb = train_cfg['wandb']
-    do_tb = train_cfg['tb']
+    episodes = train_cfg["episodes"]    
     n_render = train_cfg['n_render']
-    
+    load = train_cfg['load']
 
 
     # Create env and agent
@@ -83,22 +80,30 @@ if __name__ == '__main__':
         agent_name = args.agent, 
         env = env, 
         agent_cfg = agent_cfg,
-        train_cfg=train_cfg,
+        train_cfg = train_cfg,
         )
     
 
+
     # Logging
-    if do_wandb:
+    if train_cfg['wandb']:
         try:
             from settings import project, entity
         except ImportError:
-            raise Exception("You need to specify your WandB ids in settings.py\nTemplate is available at div/settings_template.py")
-        train_run = wandb.init(project = project,
+            raise Exception("For using WandB, you need to specify your WandB ids in settings.py\nTemplate is available at templates/settings.py")
+        train_run = wandb.init(
+                        project = project,
                         entity = entity,
-                        config = agent.config,)
+                        config = agent.config,
+                        dir = 'logs',
+                        )
 
-    # Load model
-    # if load: pass
+    if train_cfg['tb']:
+        agent.tb_writer = SummaryWriter(log_dir = f'logs/tb/{args.agent}_{args.env}_{get_date_hour_min()}')
+    
+    # Load model TODO : add load model
+    if load: 
+        pass
     
     # Training
     episode = 1
@@ -120,13 +125,9 @@ if __name__ == '__main__':
             print(f"Episode n°{episode} - Total step n°{step} ...", end = '\r')
             if episode % n_render == 0:
                 env.render()
+                sleep(0.01)
             agent.log_metrics()
-            if do_tb:
-                pass
-            if keyboard.is_pressed('q'):
-                print("\nQuitting...")
-                exit()
-
+            
             #Reset env if episode ended, else change state
             if done:
                 step += 1

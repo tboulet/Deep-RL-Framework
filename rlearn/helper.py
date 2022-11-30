@@ -1,12 +1,13 @@
 import argparse
 import yaml
 from yaml import SafeLoader
+import datetime
 
 try:
     from settings import config_type
 except ImportError:
     config_type = 'default'
-    print('No settings.py file found. Using default config. You can create a settings.py file following templates/settings.py.')
+    print('No config_type field found in a settings.py file. Using default config. You can create a settings.py file following templates/settings.py.')
 
 
 def get_configs(args : argparse.Namespace):
@@ -62,3 +63,8 @@ def str_to_bool(s : str):
         return False
     else:
         raise Exception(f'Invalid boolean string: {s}')
+
+
+def get_date_hour_min():
+    now = datetime.datetime.now()
+    return f'{now.day}/{now.month}_{now.hour}h{now.minute}'

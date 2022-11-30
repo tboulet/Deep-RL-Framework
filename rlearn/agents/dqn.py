@@ -1,42 +1,36 @@
-from copy import copy, deepcopy
+from copy import deepcopy
 import numpy as np
-import math
 import gym
-import sys
-import random
-import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
-import torchvision.transforms as T
 
 from rlearn.memory import Memory_episodic
 from rlearn.metrics import MetricS_On_Learn
-from rlearn.algorithms import Agent
+from rlearn.agents import Agent
 
 class DQN(Agent):
 
-    space_types = ['obs-continuous']
     implemented_algorithm_methods = ["SARSA", "SARSAE", "Q-Learning", "SARSAN", "SARSANE", "Q-Learning n-step", "SARSA unbiased", "SARSAN unbiased", ]
 
     def __init__(self, env : gym.Env, agent_cfg : dict, train_cfg : dict):
         # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
         super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
-        # Eventually add metrics relative to this particular agent
-        self.metrics.append(MetricS_On_Learn(self))
 
         # Memory
-        self.memory = Memory_episodic(MEMORY_KEYS = ['observation', 'action','reward', 'done', 'prob'])
+        self.memory = Memory_episodic(
+            MEMORY_KEYS = ['observation', 'action','reward', 'done', 'prob'],
+            max_memory_len=self.buffer_size,
+            )
 
         # Build networks
-        self.n_actions = self.env.action_space.n
-        n_obs = self.env.observation_space.shape[0]
+        self.n_actions = env.action_space.n
+        self.n_obs = self.env.observation_space.shape[0]
         if len(self.env.observation_space.shape) > 1:
             raise NotImplementedError("Only works with 1D observation spaces.")
         action_value = nn.Sequential(
-                nn.Linear(n_obs, 32),
+                nn.Linear(self.n_obs, 32),
                 nn.ReLU(),
                 nn.Linear(32, 32),
                 nn.ReLU(),
@@ -45,8 +39,11 @@ class DQN(Agent):
         self.action_value = action_value
         self.action_value_target = deepcopy(action_value)
         self.opt = optim.Adam(lr = self.learning_rate, params=action_value.parameters())
-        
-        
+    
+    @classmethod
+    def get_space_types(cls):
+        return ["semi-continuous"]
+    
     def act(self, observation, mask = None, training = True):
         '''Ask the agent to take a decision given an observation.
         observation : an (n_obs,) shaped observation.
@@ -75,12 +72,11 @@ class DQN(Agent):
             else:
                 prob = epsilon/self.n_actions
         
-        #Save metrics
-        if training: 
-            self.last_prob = prob
+        #Save metrics            
         self.add_metric(mode = 'act')
     
         # Action
+        self.last_prob = prob
         return action
 
 
@@ -187,9 +183,9 @@ class DQN(Agent):
         for phi, phi_target in zip(self.action_value.parameters(), self.action_value_target.parameters()):
             phi_target.data = self.tau * phi_target.data + (1-self.tau) * phi.data    
        
-        #Save metrics*
-        values["q_loss"] = loss.detach().numpy()
-        values["q_value"] = Q_s.mean().detach().numpy()
+        #Save metrics
+        values["critic_loss"] = loss.detach().numpy()
+        values["value"] = Q_s.mean().detach().numpy()
         self.add_metric(mode = 'learn', **values)
         
         

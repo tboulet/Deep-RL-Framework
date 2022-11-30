@@ -1,0 +1,6 @@
+torch 
+torchvision 
+torchaudio
+gym==0.22
+wandb
+tensorboard

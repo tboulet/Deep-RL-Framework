@@ -1,9 +1,12 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractstaticmethod
+
 import torch
 import wandb
 from random import randint
 from rlearn.metrics import get_metrics
 import gym
+from torch import Tensor
+from typing import List
 
 class Agent(ABC):
     
@@ -19,7 +22,7 @@ class Agent(ABC):
         self.metrics_saved = list()
         
     @abstractmethod
-    def act(self, obs):
+    def act(self, obs : Tensor) -> Tensor:
         pass
     
     @abstractmethod
@@ -30,6 +33,10 @@ class Agent(ABC):
     def remember(self, **kwargs):
         pass
     
+    @abstractstaticmethod
+    def get_space_types() -> List[str]:
+        raise Exception("You must implement this method in your agent class")
+    
     def add_metric(self, mode, **values):
         if mode == 'act':
             for metric in self.metrics:
@@ -39,15 +46,15 @@ class Agent(ABC):
                 self.metrics_saved.append(metric.on_remember(**values))
         if mode == 'learn':
             for metric in self.metrics:
-                self.metrics_saved.append(metric.on_learn(**values))
+                self.metrics_saved.append(metric.on_learn(**values))    
     
     def log_metrics(self):
         for metric in self.metrics_saved:
             if self.train_cfg["wandb"]:
                 wandb.log(metric, step = self.step)
             if self.train_cfg["tb"]:
-                # self.writer.add_scalar(metric["name"], metric["value"], self.step)
-                pass
+                for key, value in metric.items():
+                    self.tb_writer.add_scalar(key, value, self.step)
             if self.train_cfg["print"]:
                 if len(metric) > 0:
                     print(metric)
@@ -57,21 +64,45 @@ class Agent(ABC):
     
     
     
+    def concat_episodes(self, episodes : List[Tensor]):
+        """Concatenate a list of episodes (of shape (n_episodes, n_elem, T, *elem_dims)) into a single tuple of shape (n_elem, n_episodes * T, *elem_dims)
+
+        Args:
+            episodes (List[Tensor]): a list of episodes, usually obtained by the .sample() method of the episodic replay buffer
+
+        Returns:
+            tuple: a tuple of tensors, each of shape (n_episodes * T, *elem_dims)
+        """
+        return [torch.concat([episode[elem] for episode in episodes], axis = 0) for elem in range(len(episodes[0]))]
     
-    def QSA(self, model, observations, actions, Q_scalar = False):
-        '''Compute Q(S,A) as a (T, 1) batch of scalar values.
-        model : action value model
-        observations : a (T, *dims) shaped tensor
-        actions : a (T, 1) shaped tensor
-        Q_scalar : whether Q is returned as a scalar or as a vector of Q values for a state
-        return : a (T, 1) shaped tensor [Q(s,a) for s,a in zip(S, A)] or a (T, n_actions) shaped tensor
-        '''
-        if not Q_scalar:
+    
+    
+    def shuffle_transitions(self, elements : List[Tensor]):
+        indexes = torch.randperm(len(elements[0]))
+        return [element[indexes] for element in elements]
+    
+    
+    
+    def QSA(self, model, observations, actions, q_output_is_scalar = False):
+        """Compute the scalar Q values of a given model.
+
+        Args:
+            model (nn.Module or str): The model used to compute Q values. If str, it must be the name of an attribute of the agent.
+            observations (tensor): a (T, *dims) shaped tensor representing observations
+            actions (tensor): a (T, 1) (discrete) or (T, *dim_actions) (continuous) shaped tensor representing actions
+            q_output_is_scalar (bool, optional): Weather the Q network works in a "Q(s) = [Q(s,a) for a in A]" way of in a "Q(s,a) = scalar" way. Defaults to False.
+
+        Returns:
+            tensor: a (T, 1) shaped tensor representing Q values
+        """
+        if isinstance(model, str):
+            model = getattr(self, model)
+        if q_output_is_scalar:
+            return model(observations, actions)
+        else:
             Q_s_a = model(observations)
             Q_s = Q_s_a.gather(dim = 1, index = actions)
             return Q_s
-        else:
-            return model(observations, actions)
     
     def pi(self, observations):
         '''Return actions corresponding to current evaluated policy.
@@ -94,7 +125,7 @@ class Agent(ABC):
         else:
             return values * importance_weights
     
-    def compute_SARSA(self, rewards, next_observations, next_actions, dones, model = 'action_value', importance_weights = None):
+    def compute_SARSA(self, rewards, next_observations, next_actions, dones, model = 'action_value', importance_weights = None, q_output_is_scalar = False):
         '''Compute the 1 step SARSA estimates Q(s,a) of action values over one episode: Q_pi(St, At) = E_mu[Rt + g * (1-Dt) * r_t+1 * Q_pi(St+1, At+1)]
         observations, actions, rewards, next_observations, next_actions, dones : (T, *dims) shaped torch tensors sampled with policy mu
         model : the name of the attribute of agent used for computing state values, in ('action_value', 'action_value_target')
@@ -102,7 +133,7 @@ class Agent(ABC):
         return : a (T, 1) shaped torch tensor representing action values
         '''
         model = getattr(self, model)
-        Q_s_future = self.QSA(model, next_observations, next_actions, Q_scalar=False)
+        Q_s_future = self.QSA(model, next_observations, next_actions, q_output_is_scalar=q_output_is_scalar)
         
         if importance_weights is None:
             return rewards + (1 - dones) * self.gamma * Q_s_future
@@ -282,7 +313,7 @@ class Agent(ABC):
         A_GAE = [None for _ in range(T)] + [0]
         t = T - 1
         while t >= 0:
-            A_GAE[t] = deltas[t] + self.gamma * self.gae_lambda * A_GAE[t + 1]
+            A_GAE[t] = deltas[t] + self.gamma * self.lam * A_GAE[t + 1]
             t -= 1
         A_GAE.pop(-1)
         A_GAE = torch.Tensor(A_GAE).unsqueeze(-1)                

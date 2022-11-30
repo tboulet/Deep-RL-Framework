@@ -9,18 +9,18 @@ steps : null
 n_render : 10
 wandb : false
 tb : false
-save : false
-print : true
+dump : false
+print : false
 metrics:
   # Values
-- MetricS_On_Learn_Numerical
+- MetricS_On_Learn
 - Metric_Total_Reward
 - Metric_Reward 
 - Metric_Critic_Value_Unnormalized
 
 # Performance
-- Metric_Time_Count
-- Metric_Performances
+# - Metric_Time_Count
+# - Metric_Performances
 
   # Other
 - Metric_Epsilon

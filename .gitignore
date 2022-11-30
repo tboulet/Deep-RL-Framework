@@ -3,6 +3,10 @@ settings.yaml
 settings.py
 personal/
 
+# Logging
+logs/wandb
+logs/tb
+
 # Gitignore exception for folders
 !./assets
 !examples

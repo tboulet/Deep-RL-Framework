@@ -1,0 +1,29 @@
+# RL general hyper-parameters
+gamma : 0.99
+lam : 0.95
+learning_rate_actor : 0.001
+learning_rate_critic : 0.001
+n_step : 12
+# algorithm_method : GAE  # GAE
+
+# Learning : parameters/tips for the learning process
+reward_scaler : 100
+update_method : soft
+tau : 0.999
+target_update_interval : 10000
+gradient_clipping : 10
+train_freq_episode : 1
+gradient_steps : 10
+batch_size : 64
+
+# Exploration
+learning_starts : 1000
+exploration_timesteps : 10000
+exploration_initial : 1
+exploration_final : 0.03
+
+# PPO specific
+ratio_clipper : 0.2
+c_entropy : 0.01
+c_value : 0.5
+num_episodes : 4

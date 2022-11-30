@@ -1,0 +1,15 @@
+# RL general hyper-parameters
+gamma : 0.99
+learning_rate_actor : 0.001
+
+# Learning : parameters/tips for the learning process
+reward_scaler : 100
+gradient_clipping : 10
+train_freq_episode : 1
+gradient_steps : 10
+batch_size : 64
+
+# Exploration
+
+# REINFORCE specific
+num_episodes : 10

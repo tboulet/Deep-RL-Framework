@@ -129,6 +129,7 @@ class Memory_episodic():
         method : the method of sampling in "all", "last", "random", "all_shuffled", "batch_shuffled", "batch".
         return : a list containing episodes, which are lists of elements : [[observs, rewards, ...], [observs, rewards], ...]
         '''
+        
         if sample_size is None:
             sample_size = len(self)
         else:
@@ -162,7 +163,6 @@ class Memory_episodic():
 
         else:
             raise NotImplementedError('Not implemented sample')
-
         return [self.episodes[idx] for idx in indexes]
 
     def __len__(self):

@@ -4,6 +4,10 @@ import math
 import sys
 import matplotlib.pyplot as plt
 
+from copy import deepcopy
+import numpy as np
+import gym
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,34 +15,57 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from torch.distributions.categorical import Categorical
 
-from div.utils import *
-from RL.MEMORY import Memory, Memory_episodic
-from RL.CONFIGS import PPO_CONFIG
-from RL.METRICS import *
-from rl_algos.AGENT import Agent
+from rlearn.memory import Memory_episodic
+from rlearn.metrics import MetricS_On_Learn
+from rlearn.agents import Agent
 
 class PPO(Agent):
     '''PPO updates its networks without changing too much the policy, which increases stability.
     NN trained : Actor Critic
     Policy used : Off-policy
-    Online : Yes
     Stochastic : Yes
     Actions : discrete (continuous not implemented)
     States : continuous (discrete not implemented)
     '''
 
-    def __init__(self, actor : nn.Module, state_value : nn.Module):
-        metrics = [MetricS_On_Learn, Metric_Total_Reward, Metric_Count_Episodes]
-        super().__init__(agent_cfg = PPO_CONFIG, metrics = metrics)
+    def __init__(self, env : gym.Env, agent_cfg : dict, train_cfg : dict):
+        # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
+        super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
+        # Additional metrics for PPO
+        self.metrics.append(MetricS_On_Learn(self))
+        
+        # Memory
         self.memory = Memory_episodic(MEMORY_KEYS = ['observation', 'action','reward', 'done', 'prob'])
         
-        self.state_value = state_value
-        self.state_value_target = deepcopy(state_value)
+        # Build networks
+        self.n_actions = env.action_space.n
+        self.n_obs = env.observation_space.shape[0]
+        if len(env.observation_space.shape) > 1:
+            raise NotImplementedError("Only works with 1D observation spaces.")
+        
+        self.state_value = nn.Sequential(
+                nn.Linear(self.n_obs, 32),
+                nn.ReLU(),
+                nn.Linear(32, 32),
+                nn.ReLU(),
+                nn.Linear(32, 1),
+            )
+        self.state_value_target = deepcopy(self.state_value)
         self.opt_critic = optim.Adam(lr = self.learning_rate_critic, params=self.state_value.parameters())
         
-        self.policy = actor
+        self.policy = nn.Sequential(
+                nn.Linear(self.n_obs, 32),
+                nn.ReLU(),
+                nn.Linear(32, 32),
+                nn.ReLU(),
+                nn.Linear(32, self.n_actions),
+                nn.Softmax(dim=-1)
+            )
                         
-        
+    @classmethod
+    def get_space_types(cls):
+        return ["semi-continuous"]
+    
     def act(self, observation, mask = None):
         '''Ask the agent to take a decision given an observation.
         observation : an (n_obs,) shaped numpy observation.
@@ -65,6 +92,7 @@ class PPO(Agent):
     def learn(self):
         '''Do one step of learning.
         '''
+        
         values = dict()
         self.step += 1
         
@@ -78,7 +106,7 @@ class PPO(Agent):
         #Sample trajectories
         episodes = self.memory.sample(
             method = "last",
-            sample_size=self.n_episodes,
+            sample_size=self.num_episodes,
             )
         
         #Compute A_s and V_s estimates and concatenate trajectories. 
@@ -86,7 +114,7 @@ class PPO(Agent):
         V_targets = list()
         for observations, actions, rewards, dones, probs in episodes:
             #Scaling the rewards
-            if self.reward_scaler is not None:
+            if hasattr(self, "reward_scaler") and self.reward_scaler is not None:
                 rewards = rewards / self.reward_scaler
             #Compute V and A on one episode
             A_episode = self.compute_GAE(rewards, observations)
@@ -95,19 +123,11 @@ class PPO(Agent):
             V_targets.append(V_targets_episode)
         advantages = torch.concat(advantages, axis = 0).detach()
         V_targets = torch.concat(V_targets, axis = 0).detach()
-        observations, actions, rewards, dones, probs = [torch.concat([episode[elem] for episode in episodes], axis = 0) for elem in range(len(episodes[0]))]
+        observations, actions, rewards, dones, probs = self.concat_episodes(episodes)
         
         #Shuffling data
-        indexes = torch.randperm(len(rewards))
         observations, actions, rewards, dones, probs, advantages, V_targets = \
-            [element[indexes] for element in [observations, 
-                                            actions, 
-                                            rewards, 
-                                            dones, 
-                                            probs, 
-                                            advantages,
-                                            V_targets,
-                                            ]]
+            self.shuffle_transitions(elements = [observations, actions, rewards, dones, probs, advantages, V_targets])
         
         #Type bug fixes
         actions = actions.to(dtype = torch.int64)
@@ -118,7 +138,7 @@ class PPO(Agent):
         opt_policy = optim.Adam(lr = self.learning_rate_actor, params=policy_new.parameters())           
         n_batch = math.ceil(len(observations) / self.batch_size)
     
-        for _ in range(self.epochs):
+        for _ in range(self.gradient_steps):
             for i in range(n_batch):
                 #Batching data
                 observations_batch = observations[i * self.batch_size : (i+1) * self.batch_size]
@@ -131,7 +151,7 @@ class PPO(Agent):
                 pi_theta_new_s_a = policy_new(observations_batch)
                 pi_theta_new_s   = torch.gather(pi_theta_new_s_a, dim = 1, index = actions_batch)
                 ratio_s = pi_theta_new_s / probs_batch
-                ratio_s_clipped = torch.clamp(ratio_s, 1 - self.epsilon_clipper, 1 + self.epsilon_clipper)
+                ratio_s_clipped = torch.clamp(ratio_s, 1 - self.ratio_clipper, 1 + self.ratio_clipper)
                 J_clip = torch.minimum(ratio_s * advantages_batch, ratio_s_clipped * advantages_batch).mean()
 
                 #Error on critic : L = L(V(s), V_target)   with V_target = r + gamma * (1-d) * V_target(s_next)
@@ -145,7 +165,7 @@ class PPO(Agent):
                 H = H_s.mean()
                             
                 #Total objective function
-                J = J_clip - self.c_critic * critic_loss + self.c_entropy * H
+                J = J_clip - self.c_value * critic_loss + self.c_entropy * H
                 loss = - J
                 
                 #Gradient descend

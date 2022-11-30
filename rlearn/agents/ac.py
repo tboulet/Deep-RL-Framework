@@ -14,41 +14,53 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from torch.distributions.categorical import Categorical
 
-from RL.MEMORY import Memory
-from RL.CONFIGS import ACTOR_CRITIC_CONFIG
-from RL.METRICS import *
-from rl_algos.AGENT import Agent
+from copy import copy, deepcopy
+import numpy as np
+import math
+import sys
+import matplotlib.pyplot as plt
 
-class ACTOR_CRITIC(Agent):
+from copy import deepcopy
+import numpy as np
+import gym
 
-    def __init__(self, 
-                actor : nn.Module, 
-                action_value : nn.Module = None, 
-                state_value : nn.Module = None, 
-                advantage_value : nn.Module = None, 
-                ):
-        '''A general Actor Critic algorithm, using a policy network that learns to act and a critic network that learns the model. 
-        The parameter compute_gain_method defines the method for defining the weight of the policy gradients which can be (or not be) offline, centered, causal and using a critic.
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import torchvision.transforms as T
+from torch.distributions.categorical import Categorical
+
+from rlearn.memory import Memory_episodic
+from rlearn.metrics import MetricS_On_Learn
+from rlearn.agents import Agent
+
+class AC(Agent):
+
+    def __init__(self, env : gym.Env, agent_cfg : dict, train_cfg : dict):
+        # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
+        super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
+        # Additional metrics for AC
+        self.metrics.append(MetricS_On_Learn(self))        
+        self.memory = Memory_episodic(MEMORY_KEYS = ['observation', 'action','reward', 'done', 'next_observation'])
         
-        memory : a Memory object
-        actor : a nn.Module neural network, pi_theta : s --> [p(a|s) for a]
-        action_value : a nn.Module neural network, Q_omega : s --> [Q(s,a) for a]
-        state_value : a nn.Module neural network, V_phi  : s --> V(s)
-        metrics : a list of Metrics objects
-        **config : a config dictionnary for Actor_Critic
-        '''
-        metrics = [MetricS_On_Learn, Metric_Total_Reward, Metric_Count_Episodes]
-        super().__init__(agent_cfg = ACTOR_CRITIC_CONFIG, metrics = metrics)
-        self.memory = Memory(MEMORY_KEYS = ['observation', 'action','reward', 'done', 'next_observation'])
-        self.step = 0
-                
-        self.setup_critic(action_value, state_value, advantage_value)
-        self.policy = actor
+        # Build networks
+        self.n_actions = env.action_space.n
+        self.n_obs = env.observation_space.shape[0]
+        self.setup_critic()
+        self.policy = nn.Sequential(
+                nn.Linear(self.n_obs, 32),
+                nn.ReLU(),
+                nn.Linear(32, 32),
+                nn.ReLU(),
+                nn.Linear(32, self.n_actions),
+                nn.Softmax(dim=-1)
+            )
         self.opt_policy = optim.Adam(lr = self.learning_rate_actor, params=self.policy.parameters())
         
         
     
-    def setup_critic(self, Q, V, A):
+    def setup_critic(self):
         '''Method for preparing the ACTOR_CRITIC object to use and train its critic depending of the method used
         for computing gain.
         '''
@@ -58,32 +70,59 @@ class ACTOR_CRITIC(Agent):
                 self.alpha_0 = self.config["alpha_0"] if "alpha_0" in self.config else 1e-2
                 self.V_0 = 0
         elif self.compute_gain_method in ("state_value", "state_value_centered", "total_future_reward_minus_state_value", "GAE"):
-            if V is None:
-                raise Exception(f"Using method {self.compute_gain_method} requires to use state value V.")
             self.use_Q, self.use_V, self.use_A = False, True, False
-            self.state_value = V
-            self.state_value_target = deepcopy(V)
+            self.state_value = self.create_V()
+            self.state_value_target = deepcopy(self.state_value)
             self.opt_critic = optim.Adam(lr = self.learning_rate_critic, params = self.state_value.parameters())
         elif self.compute_gain_method in ("action_value", "action_value_centered", "total_future_reward_minus_action_value"):
-            if Q is None:
-                raise Exception(f"Using method {self.compute_gain_method} requires to use action value Q.")
             self.use_Q, self.use_V, self.use_A = True, False, False
-            self.action_value = Q
+            self.action_value = self.create_Q()
             self.opt_critic = optim.Adam(lr = self.learning_rate_critic, params=self.action_value.parameters())
         elif self.compute_gain_method == "advantage_value":
-            if A is None:
-                raise Exception(f"Using method {self.compute_gain_method} requires to use advantage value A.")
             self.use_Q, self.use_V, self.use_A = False, False, True
-            self.advantage_value = A
+            self.advantage_value = self.create_A()
             self.opt_critic = optim.Adam(lr = self.learning_rate_critic, params=self.action_value.parameters())
-            print("NOT IMPLEMENTED")
-            raise
         else:
-            raise NotImplementedError(f"Method {self.compute_gain_method} is not implemented.")
+            raise NotImplementedError(f"Method {self.compute_gain_method} is not implemented.") 
+    
         
-        
+    def create_V(self):
+        '''Create the state value function V.
+        return : a torch.nn.Module object
+        '''
+        return nn.Sequential(
+            nn.Linear(self.n_obs, 32),
+            nn.ReLU(),
+            nn.Linear(32, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1)
+        )
         
     
+    def create_Q(self):
+        '''Create the action value function Q.
+        return : a torch.nn.Module object
+        '''
+        return nn.Sequential(
+            nn.Linear(self.n_obs, 32),
+            nn.ReLU(),
+            nn.Linear(32, 32),
+            nn.ReLU(),
+            nn.Linear(32, self.n_actions)
+        )
+    
+    
+    def create_A(self):
+        '''Create the advantage value function A.
+        return : a torch.nn.Module object
+        '''
+        raise NotImplementedError("Advantage value function is not implemented yet.")
+        
+        
+    @classmethod
+    def get_space_types(cls):
+        return ["semi-continuous"]
+        
     
     def act(self, observation, mask = None):
         '''Ask the agent to take a decision given an observation.
@@ -115,15 +154,20 @@ class ACTOR_CRITIC(Agent):
         self.step += 1
         values = dict()
         
-        #Sample trajectories
-        observations, actions, rewards, dones, next_observations = self.memory.sample(
-            method = "all",
-            )
-        actions = actions.to(dtype = torch.int64)
-        
-        #Learn only at end of episode
-        if not dones[-1]:
+        #Learn only at the end of episodes, and only every train_freq_episode episodes.
+        if not self.memory.done:
             return
+        self.episode += 1
+        if self.episode % self.train_freq_episode != 0:
+            return
+        
+        #Sample trajectories
+        episodes = self.memory.sample(
+            method = "last",
+            sample_size=self.num_episodes,
+            )
+        observations, actions, rewards, dones, next_observations = episodes[0]
+        actions = actions.to(dtype = torch.int64)
         
         #Scaling the rewards
         if self.reward_scaler is not None:          
@@ -135,14 +179,14 @@ class ACTOR_CRITIC(Agent):
             #G_t can be estimated by various methods
             with torch.no_grad():
                 G = self.compute_gain(observations, actions, rewards, dones, next_observations, method = self.compute_gain_method)
-            for _ in range(self.gradient_steps_policy):
-                self.opt_policy.zero_grad()     
+            for _ in range(self.gradient_steps_policy): 
                 probs = self.policy(observations)   #(T, n_actions)
                 probs = torch.gather(probs, dim = 1, index = actions)   #(T, 1)
                 log_probs = torch.log(probs)[:,0]     #(T,)
                 loss_pi = torch.multiply(log_probs, G)
                 loss_pi = - torch.sum(loss_pi)
                 #Backpropagate to improve policy
+                self.opt_policy.zero_grad()    
                 loss_pi.backward(retain_graph = True)
                 self.opt_policy.step()
             #Empty memory of previous episode
@@ -163,9 +207,9 @@ class ACTOR_CRITIC(Agent):
                 Q_s = Q_s_a.gather(dim = 1, index = actions)
                 loss_Q = criterion(Q_s_estimated, Q_s)
                 loss_Q.backward(retain_graph = True)
-                if self.clipping is not None:
+                if self.gradient_clipping is not None:
                     for param in self.action_value.parameters():
-                        param.grad.data.clamp_(-self.clipping, self.clipping)
+                        param.grad.data.clamp_(-self.gradient_clipping, self.gradient_clipping)
                 self.opt_critic.step()
             values["critic_loss"] = loss_Q.detach().numpy()
             values["value"] = Q_s.detach().numpy().mean()
@@ -182,9 +226,9 @@ class ACTOR_CRITIC(Agent):
                 V_s = self.state_value(observations)
                 loss_V = criterion(V_s, V_s_estimated)         
                 loss_V.backward()
-                if self.clipping is not None:
+                if self.gradient_clipping is not None:
                     for param in self.state_value.parameters():
-                        param.grad.data.clamp_(-self.clipping, self.clipping)
+                        param.grad.data.clamp(-self.gradient_clipping, self.gradient_clipping)
                 self.opt_critic.step()
             values["critic_loss"] = loss_V.detach().numpy()
             values["value"] = V_s.detach().numpy().mean()
@@ -216,7 +260,6 @@ class ACTOR_CRITIC(Agent):
         return : metrics, a list of metrics computed during this remembering step.
         '''
         self.memory.remember((observation, action, reward, done, next_observation))
-        
         values = {"obs" : observation, "action" : action, "reward" : reward, "done" : done, "next_obs" : next_observation}
         self.add_metric(mode = 'remember', **values)
         
@@ -255,7 +298,7 @@ class ACTOR_CRITIC(Agent):
             A_GAE = [None for _ in range(ep_lenght - 1)] + [delta[-1]]
             for u in range(1, ep_lenght):
                 t = ep_lenght - 1 - u
-                A_GAE[t] = self.gamma * self.lmbda * A_GAE[t+1] + delta[t]     
+                A_GAE[t] = self.gamma * self.lam * A_GAE[t+1] + delta[t]     
             G = torch.tensor(A_GAE, dtype=torch.float)
                        
         elif method == "action_value":

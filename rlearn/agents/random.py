@@ -1,6 +1,6 @@
 from rlearn.memory import Memory_episodic
 from rlearn.metrics import MetricS_On_Learn, MetricS_On_Learn_Numerical, Metric_Performances
-from rlearn.algorithms import Agent
+from rlearn.agents import Agent
 import gym
 
 class RandomAgent(Agent):

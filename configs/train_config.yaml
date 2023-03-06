@@ -1,0 +1,6 @@
+# This will use the <algo> algorithm to train on the <env> environment 
+# following the <training> training configuration. 
+defaults:
+  - algo: dqn
+  - training: default_training
+  - env: cartpole

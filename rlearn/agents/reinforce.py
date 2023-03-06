@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
-import torchvision.transforms as T
 from torch.distributions.categorical import Categorical
 
 from copy import copy, deepcopy

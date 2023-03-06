@@ -1,0 +1,32 @@
+# Training & eval numerical parameters
+train_timesteps: 1000
+train_episodes: 100
+eval_freq: 100
+render_freq: 50
+n_eval_episodes: 10
+
+# Seed
+seed: 1234
+
+# Parallelization
+n_envs: 4
+
+# Logging
+do_wandb: False
+do_tb: True
+do_print: True
+do_dump: True
+
+# Log & save directories
+log_path: "logs"
+log_path_tb: "logs/tensorboard"
+models_path: "models"
+best_model_path: "models/best_model"
+final_model_path: "models/final_model"
+
+# Loading 
+checkpoint: "models/best_model"
+checkpoint_criteria : "time"
+
+# Name of the project
+project_name : "RLProject"

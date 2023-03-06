@@ -1,6 +1,12 @@
-torch 
-torchvision 
-torchaudio
 gym==0.22
+torch
+torchvision
+numpy
+matplotlib
+pygame
+
 wandb
 tensorboard
+
+hydra
+omegaconf

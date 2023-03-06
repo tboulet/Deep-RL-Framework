@@ -1,0 +1,4 @@
+create_env_fn_string: environment.gym:create_gym_env
+env_kwargs:
+  id: CartPole-v0
+env_name: CartPole-v0

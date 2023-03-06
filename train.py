@@ -3,6 +3,10 @@ from rlearn.agents import Agent
 from rlearn.implemented_agents import make_agent
 from rlearn.helper import get_configs, get_hp_dict, get_date_hour_min
 
+# Configs
+import hydra
+from omegaconf import DictConfig, OmegaConf
+
 # Other
 import gym
 import argparse
@@ -47,8 +51,8 @@ def get_args():
     
     
 
-
-if __name__ == '__main__':
+@hydra.main(config_path = 'configs', config_name = 'config')
+def main():
     args = get_args()
     
     print("Run starts ...")
@@ -142,7 +146,8 @@ if __name__ == '__main__':
 
 
 
-
+if __name__ == '__main__':
+    main()
 
 
 

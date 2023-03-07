@@ -2,6 +2,7 @@
 settings.yaml
 settings.py
 personal/
+outputs/
 
 # Logging
 logs/wandb

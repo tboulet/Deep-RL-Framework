@@ -29,8 +29,8 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from torch.distributions.categorical import Categorical
 
-from rlearn.memory import Memory_episodic
-from rlearn.metrics import MetricS_On_Learn
+from rlearn.core.memory import Memory_episodic
+from rlearn.core.metrics import ClassicalLearningMetrics
 from rlearn.agents import Agent
 
 
@@ -47,7 +47,7 @@ class REINFORCE(Agent):
         # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
         super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
         # Additional metrics for REINFORCE
-        self.metrics.append(MetricS_On_Learn(self))
+        self.metrics.append(ClassicalLearningMetrics(self))
         
         # Memory
         self.memory = Memory_episodic(MEMORY_KEYS = ['observation', 'action','reward', 'done'])
@@ -85,7 +85,7 @@ class REINFORCE(Agent):
         action = actions.numpy()[0]
         
         #Save metrics
-        self.add_metric(mode = 'act')
+        self.compute_metrics(mode = 'act')
         
         # Action
         return action
@@ -141,7 +141,7 @@ class REINFORCE(Agent):
     
         #Save metrics
         values["actor_loss"] = loss.detach().numpy()
-        self.add_metric(mode = 'learn', **values)
+        self.compute_metrics(mode = 'learn', **values)
 
 
 
@@ -153,4 +153,4 @@ class REINFORCE(Agent):
                     
         #Save metrics
         values = {"obs" : observation, "action" : action, "reward" : reward, "done" : done}
-        self.add_metric(mode = 'remember', **values)
+        self.compute_metrics(mode = 'remember', **values)

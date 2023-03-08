@@ -1,28 +1,25 @@
-from rlearn.memory import Memory_episodic
-from rlearn.metrics import MetricS_On_Learn, MetricS_On_Learn_Numerical, Metric_Performances
 from rlearn.agents import Agent
 import gym
 
 class RandomAgent(Agent):
     '''A random agent
     '''
-    space_types = ['discrete', 'continuous', 'obs-continuous', 'action-continuous']
+    @classmethod
+    def get_supported_action_space_types(cls):
+        return ["discrete"]
 
-    def __init__(self, env : gym.Env, agent_cfg : dict):
-        super().__init__(
-            env = env, 
-            agent_cfg = agent_cfg,
-            metrics=[MetricS_On_Learn_Numerical, Metric_Performances]) #Choose metrics here
+    def __init__(self, env : gym.Env, config : dict):
+        super().__init__(env = env, config = config)
     
     def act(self, obs):
         action = self.env.action_space.sample()
-        self.add_metric('act')
+        self.compute_metrics(mode = 'act')
         return action
     
     def learn(self):
-        self.add_metric('learn')
+        self.compute_metrics(mode = 'learn')
         pass
     
     def remember(self, *args):
-        self.add_metric('remember')
+        self.compute_metrics(mode = 'remember')
         pass

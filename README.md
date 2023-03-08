@@ -25,66 +25,22 @@ source venvRLEARN/bin/activate # on linux
 venvRLEARN\Scripts\activate    # on windows
 ```
 
-**Option 1 : Install the package from PyPI:**
-
-```bash
-pip install rlearn (WIP, not available yet)
-```
-
-**Option 2 : Install the package from GitHub:**
-
-```bash
-pip install git+https://github.com/tboulet/Deep-RL-Framework.git
-```
-
-**Option 3 : Install the package in local:**
+**Install the package from source:**
 
 ```bash
 git clone git@github.com:tboulet/Deep-RL-Framework.git
 cd Deep-RL-Framework
 pip install -e .
-```
-
-**Install the dependencies:**
-
-```bash
-# Clone and go inside the repository
-pip install -r requirements.txt
-```
+``` 
 
 
 # Usage
 
-**For training algorithms inside this repository:**
+**For training algorithms:**
 
 ```bash
-python train.py --agent <agent> --env <env>
+rlearn train
 ```
-
-Please note that your Gym environnement must be registered in order to be used.
-
-**Fields:**
-
-Required fields (all other are optional):
-- agent : the name of your algorithm (e.g. DQN, PPO, random, ...). See the list of available agents below.
-- env : the name of your environnement (e.g. CartPole-v0, LunarLander-v2, ...). The env must be registered as a Gym environnement.
-
-Training fields:
-- train : whether to train the agent or not.
-- load : whether to load the agent or not.  (WIP)
-- load_path : the path to the agent to load. By default, the most advanced (in terms of timesteps spend training on the env) agent will be loaded.
-
-Configurations: The default configs are in configs/default/
-- agent-cfg : the path to the config file of the agent. A default config file for the agent will be used if not specified.
-- train-cfg : the path to the config file of the training. A default config file for the training will be used if not specified.
-
-Feedback and logging:
-- wandb : whether to use wandb or not. If true you must have specified your IDs in the settings.py file (see template at templates/settings.py).
-- tb : whether to use tensorboard or not.
-- n_render : the frequency (one episode each n_render) of episodes to render.
-
-Hyperparameters: This field can be use if you want to quickly override hyperparameters of the agent config, such as --hp={gamma:0.99,lr:0.001}.
-- hp : the hyperparameters to override, as a dict string with no spaces.
 
 
 
@@ -120,18 +76,65 @@ Agent are objects that can be trained on an environnement. They can be found in 
 - AC
 - REINFORCE
 
-For being used, an agent must implement the rlearn.algorithms.agent.Agent interface, i.e. act, remember and learn methods. Check the Agent class doctrings for more precision. It then must be added inside rlearn/implemented_agents.py.
+## Creating an agent :
 
-For creating a new agent, you must :
-- Create a new file for this agent, for example rlearn/algorithms/agents/my_agent.py, where other agents are.
-- Implement the Agent interface, ie :
-- Implement the act method, which returns an action given an observation.
-- Implement the remember method, which stores the experience (observation, action, reward, next_observation, done) in the agent's memory.
-- Implement the learn method, which trains the agent on the experience stored in the memory.
-- Implement the get_state_types method, wichi returns which states the agent is able to handle (check docstring).
-- In the init() method, you must call the init() method of Agent. This will set any attribute in the agent-cfg file as an attribute of the agent, define metrics and do other stuff.
-- Add the agent to the rlearn/implemented_agents.py file
+For creating a new agent (example DQN), you must :
+- add a yaml config file in the right folder : ```rlearn/configs/algo/dqn.yaml``` that must contain :
+    - the name of the agent class
+    - the algorithm name
+    - the algorithm parameters (gamma, lr, etc.)
 
+```rlearn/configs/algo/dqn.yaml``` :
+```yaml
+create_algo_fn_string: rlearn.agents.dqn:DQN
+algo_name: DQN
+
+algo_config:
+  #Hyper-parameters
+  gamma : 0.99
+  sample_size : 256
+  learning_rate : 0.001
+  ...
+```
+- create the agent class in the corresponding folder : ```rlearn/agents/dqn.py``` that must inherit from the ```Agent``` class and implement the Agent interface :
+    - ```act``` : return the action to take given the observation
+    - ```learn``` : do any learning in this phase
+    - ```remember``` : store the experience in the memory
+    - ```get_supported_action_space_types``` : return a list of supported action space types (discrete or continuous) that the algorithm can handle. For DQN, it is only discrete because DQN can't handle continuous action space.
+    - additonally, the init method must call the ```Agent``` init method with the config file path as argument.
+    
+```rlearn/agents/random.py``` :
+```python
+from rlearn.agents import Agent
+import gym
+
+class RandomAgent(Agent):
+    '''A random agent
+    '''
+    @classmethod
+    def get_supported_action_space_types(cls):
+        return ["discrete", "continuous"]
+
+    def __init__(self, env : gym.Env, config : dict):
+        super().__init__(env = env, config = config)
+        # do any initialization here
+    
+    def act(self, obs):
+        action = self.env.action_space.sample()
+        self.add_metric('act', any_name = 1234)
+        return action
+    
+    def learn(self):
+        # do any learning here
+        self.add_metric('learn')
+        pass
+    
+    def remember(self, *args):
+        # store the experience in the memory here
+        self.add_metric('remember')
+        pass
+```
+- Additionaly, if you want to log metrics, you can use the ```add_metric``` method of the ```Agent``` class at the end of your act, learn and remembler methods. This will save internally metrics that metric managers will be able to use to. Check rlearn/core/metrics.py for more details on how to log metrics.
 
 
 

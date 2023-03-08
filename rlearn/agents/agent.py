@@ -3,65 +3,103 @@ from abc import ABC, abstractmethod, abstractstaticmethod
 import torch
 import wandb
 from random import randint
-from rlearn.metrics import get_metrics
+from rlearn.core.helper import create_run_name
+from rlearn.core.metrics import Metric, get_metrics_classes
+from rlearn.core.loggers import Logger, get_loggers_classes
 import gym
 from torch import Tensor
 from typing import List
 
 class Agent(ABC):
     
-    def __init__(self, env : gym.Env, agent_cfg : dict = dict(), train_cfg : dict = dict()):
+    @abstractstaticmethod
+    def get_supported_action_space_types() -> List[str]:
+        """Get the list of action space types supported by the agent, among 'discrete' and 'continuous'.
+
+        Returns:
+            List[str]: the list of action space types supported by the agent
+        """
+        raise Exception("You must implement this method in your agent class")
+
+
+    def __init__(self, 
+            env : gym.Env, 
+            config : dict):
         self.step = 0
         self.episode = 0
         self.env = env
-        self.config = agent_cfg if agent_cfg is not None else dict()
-        self.train_cfg = train_cfg if train_cfg is not None else dict()
-        self.metrics = [Metric(self) for Metric in get_metrics(train_cfg["metrics"])]
-        for name, value in self.config.items():
+        # Create the list of Metric objects, that will be used to compute the metrics
+        self.metrics : List[Metric] = [metric_class(self) for metric_class in get_metrics_classes(config.training.metrics)]
+        # Create the list of Logger objects, that will be used to log the metrics
+        run_name = create_run_name(config = config)
+        self.loggers : List[Logger] = [logger_class(
+            project_name = config.training.project_name,
+            run_name = run_name,
+            run_config = config,
+            log_dir = config.training.log_path,
+            ) 
+            for logger_class in get_loggers_classes(config.training.loggers)]
+        # Set each algo config attribute as an attribute of the agent
+        for name, value in config.algo.algo_config.items():
             setattr(self, name, value)
         self.metrics_saved = list()
         
+
     @abstractmethod
     def act(self, obs : Tensor) -> Tensor:
+        """Act on the environment, given an observation.
+
+        Args:
+            obs (Tensor): the observation
+
+        Returns:
+            Tensor: the action
+        """
         pass
     
+
     @abstractmethod
     def learn(self):
+        """Learning phase. This is called at every step but may have an effect every n steps, every episodes, every n episodes, never, etc. depending on the agent.
+        """
         pass
+
 
     @abstractmethod
     def remember(self, **kwargs):
+        """Save a transition in the agent's memory.
+
+        Args:
+            kwargs (dict): a dictionary of the transition elements (obs, action, reward, done, next_obs, info) for example
+        """
         pass
     
-    @abstractstaticmethod
-    def get_space_types() -> List[str]:
-        raise Exception("You must implement this method in your agent class")
     
-    def add_metric(self, mode, **values):
+    def compute_metrics(self, mode : str, **values : dict):
+        """Use the data to compute metrics and save them internally.
+        Those metrics will be used by metrics manager to compute metrics and logged by the loggers.
+
+        Args:
+            mode (str): the mode in which the data are added. Can be 'act', 'remember' or 'learn'
+            values (dict): a dictionary of data (metric name : metric value)
+        """
         if mode == 'act':
             for metric in self.metrics:
-                self.metrics_saved.append(metric.on_act(**values))
+                self.metrics_saved.append(metric.compute_metrics_on_act_phase(**values))
         if mode == 'remember':
             for metric in self.metrics:
-                self.metrics_saved.append(metric.on_remember(**values))
+                self.metrics_saved.append(metric.compute_metrics_on_remember_phase(**values))
         if mode == 'learn':
             for metric in self.metrics:
-                self.metrics_saved.append(metric.on_learn(**values))    
+                self.metrics_saved.append(metric.compute_metrics_on_learn_phase(**values))    
     
+
     def log_metrics(self):
-        for metric in self.metrics_saved:
-            if self.train_cfg["wandb"]:
-                wandb.log(metric, step = self.step)
-            if self.train_cfg["tb"]:
-                for key, value in metric.items():
-                    self.tb_writer.add_scalar(key, value, self.step)
-            if self.train_cfg["print"]:
-                if len(metric) > 0:
-                    print(metric)
-            if self.train_cfg["dump"]:
-                pass
+        """Log the currently saved metrics with all the loggers.
+        """
+        for logger in self.loggers:
+            logger.log_metrics(items = self.metrics_saved, step = self.step)
         self.metrics_saved = list()
-    
     
     
     def concat_episodes(self, episodes : List[Tensor]):
@@ -77,12 +115,20 @@ class Agent(ABC):
     
     
     
-    def shuffle_transitions(self, elements : List[Tensor]):
+    def shuffle_transitions(self, elements : List[Tensor]) -> List[Tensor]:
+        """Shuffle a list of tensors, each of shape (n_episodes * T, *elem_dims), along the first dimension.
+
+        Args:
+            elements (List[Tensor]): a list of tensors, each representing several elements of the same form, for example several observations, several actions, etc.
+
+        Returns:
+            List[Tensor]: the list of tensors, each of its elements shuffled the same way
+        """
         indexes = torch.randperm(len(elements[0]))
         return [element[indexes] for element in elements]
     
     
-    
+    # TODO: refactor and verify
     def QSA(self, model, observations, actions, q_output_is_scalar = False):
         """Compute the scalar Q values of a given model.
 
@@ -339,7 +385,7 @@ class ExampleAgent(Agent):
     n_actions : int, n of action space
     '''
     def __init__(self, n_actions):
-        super().__init__(metrics=get_metrics(["MetricS_On_Learn_Numerical", "Metric_Performances"])) #Choose metrics here
+        super().__init__(metrics=get_metrics_classes(["MetricS_On_Learn_Numerical", "Metric_Performances"])) #Choose metrics here
         self.n_actions = n_actions  #For RandomAgent only
         raise
     
@@ -349,7 +395,7 @@ class ExampleAgent(Agent):
         action = randint(0, self.n_actions - 1)
         #Save metrics
         values = {"my_metric_name1" : 22, "my_metric_name2" : 42}
-        self.add_metric(mode = 'act', **values)
+        self.compute_metrics(mode = 'act', **values)
         
         return action
     
@@ -359,11 +405,11 @@ class ExampleAgent(Agent):
         #Save metrics
         self.step += 1
         values = {"my_metric_name1" : 22, "my_metric_name2" : 42}
-        self.add_metric(mode = 'learn', **values)
+        self.compute_metrics(mode = 'learn', **values)
     
     def remember(self, *args):
         #Save kwargs in memory here
         ... 
         #Save metrics
         values = {"my_metric_name1" : 22, "my_metric_name2" : 42}
-        self.add_metric(mode = 'remember', **values)
+        self.compute_metrics(mode = 'remember', **values)

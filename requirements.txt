@@ -8,5 +8,5 @@ pygame
 wandb
 tensorboard
 
-hydra
+hydra-core
 omegaconf

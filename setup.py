@@ -12,7 +12,13 @@ setup(
     
     packages=find_namespace_packages(),
     install_requires=requirements,
-    
+    entry_points={
+        'console_scripts': [
+            'rlearn-train=rlearn.train:main'
+            'rlearn-enjoy=rlearn.enjoy:main' # TODO : add enjoy
+        ]
+    },
+
     license="MIT",
     description="RLearn is a framework for Deep Reinforcement Learning.",
     long_description=open('README.md').read(),      

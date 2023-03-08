@@ -1,20 +1,15 @@
 # RLearn
-import os
 from typing import Callable
 from rlearn.agents import Agent
-from rlearn.implemented_agents import make_agent
-from rlearn.helper import get_date_hour_min, string_to_callable, choose_model_to_load, create_model_path, set_random_seed
+from rlearn.core.helper import string_to_callable, choose_model_to_load, create_model_path, set_random_seed, none_to_infs, none_to_empty_dict
+
 # Configs
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
 # Other
 import gym
-import argparse
-import wandb
-from torch.utils.tensorboard import SummaryWriter
-from time import time, sleep
-import random
+from time import sleep
 
     
     
@@ -29,19 +24,11 @@ def main(config : DictConfig):
     eval_freq = config.training.eval_freq
     render_freq = config.training.render_freq
     n_eval_episodes = config.training.n_eval_episodes
-
-    # Model
-    # algo_class_string = config.algo.class_string
-
+    train_timesteps, train_episodes, eval_freq, render_freq, n_eval_episodes = none_to_infs(train_timesteps, train_episodes, eval_freq, render_freq, n_eval_episodes)
+    config.algo.algo_config, config.env.env_kwargs, config.training.metrics, config.training.loggers = none_to_empty_dict(config.algo.algo_config, config.env.env_kwargs, config.training.metrics, config.training.loggers)
     # Loading 
     checkpoint = config.training.checkpoint
     checkpoint_criteria = config.training.checkpoint_criteria
-
-    # Logging
-    do_wandb = config.training.do_wandb
-    do_tb = config.training.do_tb
-    do_print = config.training.do_print
-    do_dump = config.training.do_dump
 
     # Logging directories
     log_path = config.training.log_path
@@ -60,29 +47,18 @@ def main(config : DictConfig):
     set_random_seed(seed, using_cuda=False)
 
 
-
-
-
-
-    # Create env and agent
+    # Create env
     create_env_fn = string_to_callable(config.env.create_env_fn_string)
     env_kwargs = config.env.env_kwargs
     env : gym.Env = create_env_fn(**env_kwargs)
 
+    # Create agent
+    algo_class_string = config.algo.create_algo_fn_string
+    algo_class = string_to_callable(algo_class_string)
+    agent : Agent = algo_class(
+        env = env, 
+        config = config,)
 
-    # Logging
-    if do_wandb:
-        train_run = wandb.init(
-            project = project_name,
-            config=dict(), # TODO : add config
-            sync_tensorboard=True,  
-            monitor_gym=True,  # TODO : add monitor_gym
-            save_code=True, 
-            dir = os.path.join('logs'),
-            )
-    if do_tb:
-        tb_writer = SummaryWriter(log_dir = os.path.join('logs', 'tb', f'{algo_name}_{env_name}_{get_date_hour_min()}'))
-    
     # Load model TODO : add load model
     if False: 
         pass

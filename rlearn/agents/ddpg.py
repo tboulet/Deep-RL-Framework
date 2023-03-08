@@ -15,8 +15,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from rlearn.memory import Memory_episodic
-from rlearn.metrics import MetricS_On_Learn
+from rlearn.core.memory import Memory_episodic
+from rlearn.core.metrics import ClassicalLearningMetrics
 from rlearn.agents import Agent
 
 
@@ -84,7 +84,7 @@ class DDPG(Agent):
         # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
         super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
         # Eventually add metrics relative to this particular agent
-        self.metrics.append(MetricS_On_Learn(self))
+        self.metrics.append(ClassicalLearningMetrics(self))
 
         # Memory
         self.memory = Memory_episodic(MEMORY_KEYS = ['observation', 'action','reward', 'done', 'prob'])
@@ -122,7 +122,7 @@ class DDPG(Agent):
         action = (action + noise).numpy()
         
         #Save metrics
-        self.add_metric(mode = 'act')
+        self.compute_metrics(mode = 'act')
 
         # Action
         return action
@@ -184,7 +184,7 @@ class DDPG(Agent):
         values["critic_loss"] = critic_loss.detach().numpy()
         values["actor_loss"] = actor_loss.detach().numpy()
         values["value"] = Q_s_to_maximize.detach().mean().numpy()
-        self.add_metric(mode = 'learn', **values)
+        self.compute_metrics(mode = 'learn', **values)
         
         
     def remember(self, observation, action, reward, done, next_observation, info={}, **param):
@@ -195,4 +195,4 @@ class DDPG(Agent):
             
         #Save metrics
         values = {"obs" : observation, "action" : action, "reward" : reward, "done" : done}
-        self.add_metric(mode = 'remember', **values)
+        self.compute_metrics(mode = 'remember', **values)

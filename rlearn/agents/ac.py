@@ -31,8 +31,8 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 from torch.distributions.categorical import Categorical
 
-from rlearn.memory import Memory_episodic
-from rlearn.metrics import MetricS_On_Learn
+from rlearn.core.memory import Memory_episodic
+from rlearn.core.metrics import ClassicalLearningMetrics
 from rlearn.agents import Agent
 
 class AC(Agent):
@@ -41,7 +41,7 @@ class AC(Agent):
         # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
         super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
         # Additional metrics for AC
-        self.metrics.append(MetricS_On_Learn(self))        
+        self.metrics.append(ClassicalLearningMetrics(self))        
         self.memory = Memory_episodic(MEMORY_KEYS = ['observation', 'action','reward', 'done', 'next_observation'])
         
         # Build networks
@@ -141,7 +141,7 @@ class AC(Agent):
         action = actions.numpy()[0]
         
         #Save metrics
-        self.add_metric(mode = 'act')
+        self.compute_metrics(mode = 'act')
         
         # Action
         return action
@@ -247,7 +247,7 @@ class AC(Agent):
             self.V_0 += self.alpha_0 * (total_reward - self.V_0)
             
         #Metrics
-        self.add_metric(mode = 'learn', **values)
+        self.compute_metrics(mode = 'learn', **values)
 
 
 
@@ -261,7 +261,7 @@ class AC(Agent):
         '''
         self.memory.remember((observation, action, reward, done, next_observation))
         values = {"obs" : observation, "action" : action, "reward" : reward, "done" : done, "next_obs" : next_observation}
-        self.add_metric(mode = 'remember', **values)
+        self.compute_metrics(mode = 'remember', **values)
         
         
         

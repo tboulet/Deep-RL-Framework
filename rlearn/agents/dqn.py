@@ -6,17 +6,22 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from rlearn.memory import Memory_episodic
-from rlearn.metrics import MetricS_On_Learn
+from rlearn.core.memory import Memory_episodic
+from rlearn.core.metrics import ClassicalLearningMetrics
 from rlearn.agents import Agent
 
 class DQN(Agent):
 
     implemented_algorithm_methods = ["SARSA", "SARSAE", "Q-Learning", "SARSAN", "SARSANE", "Q-Learning n-step", "SARSA unbiased", "SARSAN unbiased", ]
+    
+    @classmethod
+    def get_supported_action_space_types(cls):
+        return ["discrete"]
+    
 
-    def __init__(self, env : gym.Env, agent_cfg : dict, train_cfg : dict):
-        # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
-        super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
+    def __init__(self, env : gym.Env, config : dict):
+
+        super().__init__(env = env, config = config)
 
         # Memory
         self.memory = Memory_episodic(
@@ -39,10 +44,7 @@ class DQN(Agent):
         self.action_value = action_value
         self.action_value_target = deepcopy(action_value)
         self.opt = optim.Adam(lr = self.learning_rate, params=action_value.parameters())
-    
-    @classmethod
-    def get_space_types(cls):
-        return ["semi-continuous"]
+
     
     def act(self, observation, mask = None, training = True):
         '''Ask the agent to take a decision given an observation.
@@ -73,7 +75,7 @@ class DQN(Agent):
                 prob = epsilon/self.n_actions
         
         #Save metrics            
-        self.add_metric(mode = 'act')
+        self.compute_metrics(mode = 'act')
     
         # Action
         self.last_prob = prob
@@ -186,7 +188,7 @@ class DQN(Agent):
         #Save metrics
         values["critic_loss"] = loss.detach().numpy()
         values["value"] = Q_s.mean().detach().numpy()
-        self.add_metric(mode = 'learn', **values)
+        self.compute_metrics(mode = 'learn', **values)
         
         
     def remember(self, observation, action, reward, done, next_observation, info={}, **param):
@@ -198,7 +200,7 @@ class DQN(Agent):
         
         #Save metrics
         values = {"obs" : observation, "action" : action, "reward" : reward, "done" : done}
-        self.add_metric(mode = 'remember', **values)
+        self.compute_metrics(mode = 'remember', **values)
     
 
     def get_eps(self):

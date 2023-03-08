@@ -7,21 +7,20 @@ from typing import List
 
 
 class Metric():
-    name = "Metric"
     def __init__(self):
         pass
 
-    def on_learn(self, **kwargs):
+    def compute_metrics_on_learn_phase(self, **kwargs):
         return dict()
     
-    def on_remember(self, **kwargs):
+    def compute_metrics_on_remember_phase(self, **kwargs):
         return dict()
     
-    def on_act(self, **kwargs):
+    def compute_metrics_on_act_phase(self, **kwargs):
         return dict()
     
 
-class MetricS_On_Learn(Metric):
+class ClassicalLearningMetrics(Metric):
     '''Log every metrics whose name match classical RL important values such as Q_value, actor_loss ...'''
     name = "MetricS_On_Learn"
     metric_names = ["value", "q_value", "v_value", "actor_loss", "critic_loss", "actor_reward", "entropy", "J_clip"]
@@ -29,22 +28,22 @@ class MetricS_On_Learn(Metric):
         super().__init__()
         self.agent = agent  
     
-    def on_learn(self, **kwargs):
+    def compute_metrics_on_learn_phase(self, **kwargs):
         return {metric_name : kwargs[metric_name] for metric_name in self.metric_names if metric_name in kwargs}
 
 
-class MetricS_On_Learn_Numerical(Metric):
+class AllLearningMetrics(Metric):
     '''Log every numerical metrics.'''
     name = "MetricS_On_Learn_Numerical"
     def __init__(self, agent):
         super().__init__()
         self.agent = agent  
     
-    def on_learn(self, **kwargs):
+    def compute_metrics_on_learn_phase(self, **kwargs):
         return {metric_name : kwargs[metric_name] for metric_name, value in kwargs.items() if isinstance(value, Number)}
 
 
-class Metric_Total_Reward(Metric):
+class EpisodicRewardMetric(Metric):
     '''Log total reward (sum of reward over an episode) at every episode.'''
     name = "Metric_Total_Reward"
     def __init__(self, agent):
@@ -53,7 +52,7 @@ class Metric_Total_Reward(Metric):
         self.total_reward = 0
         self.new_episode = False
 
-    def on_remember(self, **kwargs):
+    def compute_metrics_on_remember_phase(self, **kwargs):
         try:
             if self.new_episode: 
                 self.total_reward = 0
@@ -69,35 +68,35 @@ class Metric_Total_Reward(Metric):
             return dict()
 
 
-class Metric_Reward(Metric):
+class RewardMetric(Metric):
     '''Log reward at every step.'''
     name = "Metric_Reward"
     def __init__(self, agent):
         super().__init__()
         self.agent = agent
     
-    def on_remember(self, **kwargs):
+    def compute_metrics_on_remember_phase(self, **kwargs):
         try:
             return {"reward" : kwargs["reward"]}
         except:
             return dict()
         
 
-class Metric_Epsilon(Metric):
+class EpsilonMetric(Metric):
     '''Log exploration factor.'''
     name = "Metric_Epsilon"
     def __init__(self, agent):
         super().__init__()
         self.agent = agent
 
-    def on_learn(self, **kwargs):
+    def compute_metrics_on_learn_phase(self, **kwargs):
         try:
             return {"epsilon" : self.agent.get_eps()}
         except:
             return dict()
 
 
-class Metric_Critic_Value_Unnormalized(Metric):
+class StateValueUnnormalized(Metric):
     '''Log value not scaled.'''
     name = "Metric_Critic_Value_Unnormalized"
     def __init__(self, agent):
@@ -105,7 +104,7 @@ class Metric_Critic_Value_Unnormalized(Metric):
         self.agent = agent
         self.is_normalized = hasattr(self.agent, "reward_scaler") and self.agent.reward_scaler is not None
 
-    def on_learn(self, **kwargs):
+    def compute_metrics_on_learn_phase(self, **kwargs):
         try:
             if self.is_normalized:
                 return {"value_unnormalized" : self.agent.reward_scaler * kwargs["value"]}
@@ -115,7 +114,7 @@ class Metric_Critic_Value_Unnormalized(Metric):
             return dict()
 
 
-class Metric_Action_Frequencies(Metric):
+class ActionFrequencies(Metric):
     '''Log action frequency in one episode for each action possible.'''
     name = "Metric_Action_Frequencies"
     def __init__(self, agent):
@@ -124,7 +123,7 @@ class Metric_Action_Frequencies(Metric):
         self.frequencies = dict()
         self.new_episode = False
 
-    def on_remember(self, **kwargs):
+    def compute_metrics_on_remember_phase(self, **kwargs):
         try:
             if self.new_episode: 
                 self.frequencies = dict()
@@ -145,7 +144,7 @@ class Metric_Action_Frequencies(Metric):
             return dict()
         
 
-class Metric_Count_Episodes(Metric):
+class CountEpisodes(Metric):
     '''Log current number of episodes.'''
     name = "Metric_Count_Episodes"
     def __init__(self, agent):
@@ -153,7 +152,7 @@ class Metric_Count_Episodes(Metric):
         self.agent = agent
         self.n_episodes = 0
         
-    def on_remember(self, **kwargs):
+    def compute_metrics_on_remember_phase(self, **kwargs):
         try:
             if kwargs["done"]:
                 self.n_episodes += 1
@@ -164,7 +163,7 @@ class Metric_Count_Episodes(Metric):
             return dict()
         
         
-class Metric_Time_Count(Metric):
+class CountTime(Metric):
     '''Log time since the beginning of the training.'''
     name = "Metric_Time_Count"
     def __init__(self, agent):
@@ -172,11 +171,11 @@ class Metric_Time_Count(Metric):
         self.agent = agent
         self.t0 = time()
     
-    def on_learn(self, **kwargs):
+    def compute_metrics_on_learn_phase(self, **kwargs):
         return {"time" : round((time() - self.t0) / 60, 2)}
     
         
-class Metric_Performances(Metric):
+class TimePerformancePerPhase(Metric):
     '''Log time performances for different step of the training.'''
     name = "Metric_Performances"
     def __init__(self, agent):
@@ -189,27 +188,29 @@ class Metric_Performances(Metric):
         if self.agent.step < 10:
             return dict()
         return {step_of_training: dur}
-    def on_act(self, **kwargs):
+    def compute_metrics_on_act_phase(self, **kwargs):
         return self.on_x("time : ACTING + LOGGING (+ RENDERING)")
-    def on_remember(self, **kwargs):
+    def compute_metrics_on_remember_phase(self, **kwargs):
         return self.on_x("time : ENV REACTING + REMEMBERING")
-    def on_learn(self, **kwargs):
+    def compute_metrics_on_learn_phase(self, **kwargs):
         return self.on_x("time : SAMPLING + LEARNING")
     
 metric_names_to_classes = {
-    MetricS_On_Learn_Numerical.name : MetricS_On_Learn_Numerical,
-    MetricS_On_Learn.name : MetricS_On_Learn,
-    Metric_Total_Reward.name : Metric_Total_Reward,
-    Metric_Reward.name : Metric_Reward,
-    Metric_Epsilon.name : Metric_Epsilon,
-    Metric_Critic_Value_Unnormalized.name : Metric_Critic_Value_Unnormalized,
-    Metric_Action_Frequencies.name : Metric_Action_Frequencies,
-    Metric_Count_Episodes.name : Metric_Count_Episodes,
-    Metric_Time_Count.name : Metric_Time_Count,
-    Metric_Performances.name : Metric_Performances,
+    AllLearningMetrics.name : AllLearningMetrics,
+    ClassicalLearningMetrics.name : ClassicalLearningMetrics,
+    EpisodicRewardMetric.name : EpisodicRewardMetric,
+    RewardMetric.name : RewardMetric,
+    EpsilonMetric.name : EpsilonMetric,
+    StateValueUnnormalized.name : StateValueUnnormalized,
+    ActionFrequencies.name : ActionFrequencies,
+    CountEpisodes.name : CountEpisodes,
+    CountTime.name : CountTime,
+    TimePerformancePerPhase.name : TimePerformancePerPhase,
 }
 
-def get_metrics(metric_names : List[str]) -> List[Metric]:
+def get_metrics_classes(metric_names : List[str]) -> List[Metric]:
+    if metric_names is None:
+        return []
     metric_list = []
     for metric_name in metric_names:
         try:

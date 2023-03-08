@@ -1,0 +1,4 @@
+create_algo_fn_string: rlearn.agents.random:RandomAgent
+algo_name: random
+
+algo_config:

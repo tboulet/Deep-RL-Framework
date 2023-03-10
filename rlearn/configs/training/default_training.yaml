@@ -29,13 +29,13 @@ metrics:
 # Logging
 loggers:
 # - ConsoleLogger 
-# - TensorboardLogger 
+- TensorboardLogger 
 # - WandbLogger 
-# - DumpLogger
 
 # Log & save directories
 log_path: "logs"
 log_path_tb: "logs/tensorboard"
+log_path_wandb: "logs/wandb"
 models_path: "models"
 best_model_path: "models/best_model"
 final_model_path: "models/final_model"

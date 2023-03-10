@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod, abstractstaticmethod
+from tokenize import Number
 
 import torch
 import wandb
@@ -8,7 +9,7 @@ from rlearn.core.metrics import Metric, get_metrics_classes
 from rlearn.core.loggers import Logger, get_loggers_classes
 import gym
 from torch import Tensor
-from typing import List
+from typing import Dict, List
 
 class Agent(ABC):
     
@@ -42,7 +43,7 @@ class Agent(ABC):
         # Set each algo config attribute as an attribute of the agent
         for name, value in config.algo.algo_config.items():
             setattr(self, name, value)
-        self.metrics_saved = list()
+        self.metrics_saved : List[Dict[str, Number]] = []
         
 
     @abstractmethod
@@ -98,8 +99,8 @@ class Agent(ABC):
         """Log the currently saved metrics with all the loggers.
         """
         for logger in self.loggers:
-            logger.log_metrics(items = self.metrics_saved, step = self.step)
-        self.metrics_saved = list()
+            logger.log_metrics(list_of_metrics = self.metrics_saved, step = self.step)
+        self.metrics_saved = []
     
     
     def concat_episodes(self, episodes : List[Tensor]):

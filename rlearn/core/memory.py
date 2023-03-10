@@ -4,13 +4,14 @@ import random as rd
 import torch
         
 #Memory using lists    
-class Memory():
+class Memory:
     '''Memory buffer object used for saving transition and sampling them later with various methods.'''
     
     def __init__(self, MEMORY_KEYS: list, max_memory_len: int=float('inf')):
         '''
-        MEMORY_KEYS : a list of string representing names of elements to save such as 'observation', 'reward', ...
-        max_memory_len : the maximal size of the buffer (in transition or steps), default unlimited.
+        Args:
+            MEMORY_KEYS : a list of string representing names of elements to save such as 'observation', 'reward', ...
+            max_memory_len : the maximal size of the buffer (in transition or steps), default unlimited.
         '''
         self.max_memory_len = max_memory_len
         self.MEMORY_KEYS = MEMORY_KEYS        

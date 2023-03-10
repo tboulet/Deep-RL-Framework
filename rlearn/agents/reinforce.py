@@ -43,15 +43,20 @@ class REINFORCE(Agent):
     States : continuous (discrete not implemented)
     '''
 
-    def __init__(self, env : gym.Env, agent_cfg : dict, train_cfg : dict):
-        # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
-        super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
-        # Additional metrics for REINFORCE
-        self.metrics.append(ClassicalLearningMetrics(self))
-        
-        # Memory
-        self.memory = Memory_episodic(MEMORY_KEYS = ['observation', 'action','reward', 'done'])
-        
+    @classmethod
+    def get_supported_action_space_types(cls):
+        return ["discrete"]
+    
+
+    def __init__(self, env : gym.Env, config : dict):
+
+        super().__init__(env = env, config = config)
+
+        # Create memory
+        self.memory = Memory_episodic(
+            MEMORY_KEYS = ['observation', 'action','reward', 'done'],
+            )
+                
         # Build networks
         self.n_actions = env.action_space.n
         self.n_obs = env.observation_space.shape[0]

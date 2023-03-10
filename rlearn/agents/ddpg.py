@@ -77,18 +77,20 @@ class Action_value_continuous(nn.Module):
             
                  
 class DDPG(Agent):
-    '''DDPG
-    '''
 
-    def __init__(self, env : gym.Env, agent_cfg : dict, train_cfg : dict):
-        # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
-        super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
-        # Eventually add metrics relative to this particular agent
-        self.metrics.append(ClassicalLearningMetrics(self))
+    @classmethod
+    def get_supported_action_space_types(cls):
+        return ["continuous"]
 
-        # Memory
-        self.memory = Memory_episodic(MEMORY_KEYS = ['observation', 'action','reward', 'done', 'prob'])
-        
+    def __init__(self, env : gym.Env, config : dict):
+
+        super().__init__(env = env, config = config)
+
+        # Create memory
+        self.memory = Memory_episodic(
+            MEMORY_KEYS = ['observation', 'action','reward', 'done', 'prob'],
+            )
+                
         # Build networks
         self.n_obs = env.observation_space.shape[0]
         self.n_actions = env.action_space.shape[0]   

@@ -23,7 +23,7 @@ class DQN(Agent):
 
         super().__init__(env = env, config = config)
 
-        # Memory
+        # Create memory
         self.memory = Memory_episodic(
             MEMORY_KEYS = ['observation', 'action','reward', 'done', 'prob'],
             max_memory_len=self.buffer_size,

@@ -37,12 +37,19 @@ from rlearn.agents import Agent
 
 class AC(Agent):
 
-    def __init__(self, env : gym.Env, agent_cfg : dict, train_cfg : dict):
-        # Init : define RL agent variables/parameters from agent_cfg and metrics from train_cfg
-        super().__init__(env = env, agent_cfg = agent_cfg, train_cfg = train_cfg)
-        # Additional metrics for AC
-        self.metrics.append(ClassicalLearningMetrics(self))        
-        self.memory = Memory_episodic(MEMORY_KEYS = ['observation', 'action','reward', 'done', 'next_observation'])
+    @classmethod
+    def get_supported_action_space_types(cls):
+        return ["discrete"]
+    
+
+    def __init__(self, env : gym.Env, config : dict):
+
+        super().__init__(env = env, config = config)
+
+        # Create memory
+        self.memory = Memory_episodic(
+            MEMORY_KEYS = ['observation', 'action','reward', 'done', 'next_observation'],
+            )
         
         # Build networks
         self.n_actions = env.action_space.n

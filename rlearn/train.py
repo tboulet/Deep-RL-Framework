@@ -19,16 +19,17 @@ def main(config : DictConfig):
     print("\nTraining with config :\n", OmegaConf.to_yaml(config))
     
     # Training & eval numerical parameters
-    train_timesteps = config.training.train_timesteps
-    train_episodes = config.training.train_episodes
-    eval_freq = config.training.eval_freq
-    render_freq = config.training.render_freq
-    n_eval_episodes = config.training.n_eval_episodes
+    train_timesteps : int = config.training.train_timesteps
+    train_episodes : int = config.training.train_episodes
+    eval_freq : int = config.training.eval_freq
+    render_freq : int = config.training.render_freq
+    n_eval_episodes : int = config.training.n_eval_episodes
     train_timesteps, train_episodes, eval_freq, render_freq, n_eval_episodes = none_to_infs(train_timesteps, train_episodes, eval_freq, render_freq, n_eval_episodes)
     config.algo.algo_config, config.env.env_kwargs, config.training.metrics, config.training.loggers = none_to_empty_dict(config.algo.algo_config, config.env.env_kwargs, config.training.metrics, config.training.loggers)
+    
     # Loading 
-    checkpoint = config.training.checkpoint
-    checkpoint_criteria = config.training.checkpoint_criteria
+    checkpoint : str = config.training.checkpoint
+    checkpoint_criteria : str = config.training.checkpoint_criteria
 
     # Logging directories
     log_path = config.training.log_path
@@ -95,7 +96,6 @@ def main(config : DictConfig):
                 step += 1
                 obs = next_obs
 
-    # if wandb: run.finish()   #End wandb run.
     print("\nEnd of run.")
 
 

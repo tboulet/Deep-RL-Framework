@@ -1,5 +1,5 @@
-# Metrics are object with methods called inside every RL agent (after acting, remembering and learning).
-# They log efficiently information using WandB and can be easily defined.
+# Loggers are used to log metrics during training. Each logger class must implement the log_metrics method
+# which logs a dictionnary of key (name of metric) and value.
 
 from abc import ABC, abstractmethod
 from numbers import Number
@@ -94,7 +94,7 @@ class WandbLogger(Logger):
         run_config : dict,
         log_dir : str,
     ):
-        super().__init__()
+        super().__init__(project_name, run_name, run_config, log_dir)
         self.run = wandb.init(
             project = project_name,
             name = run_name,

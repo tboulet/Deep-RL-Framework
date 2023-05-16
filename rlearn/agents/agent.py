@@ -33,8 +33,8 @@ class Agent(ABC):
         self.metrics : List[Metric] = [metric_class(self) for metric_class in get_metrics_classes(config.training.metrics)]
         # Create the list of Logger objects, that will be used to log the metrics
         run_name = create_run_name(config = config)
-        self.loggers : List[Logger] = [logger_class(
-            project_name = config.training.project_name,
+        self.loggers = [logger_class(
+            project_name = "RLProject",
             run_name = run_name,
             run_config = config,
             log_dir = config.training.log_path,
